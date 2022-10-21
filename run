@@ -1,0 +1,29 @@
+#!/bin/sh
+
+set -eu
+
+FLAGS="-std=gnu++2b -ftemplate-backtrace-limit=0 -Wall -Wextra -Weverything -Werror -pedantic-errors -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-padded"
+
+if [ ${#} -eq 0 ] || [ ${#} -gt 2 ]; then
+    echo "Usage: ${0} <source file> <debug, or nothing for release>" >&2
+    exit 1
+fi
+
+if [ ${#} -eq 2 ] && [ "${2}" = "debug" ] ; then
+    FLAGS="${FLAGS} -O0 -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fno-common -fsanitize=address -fsanitize-address-use-after-scope -fsanitize-address-use-after-return=always"
+    EXECNAME="game-debug"
+    RUN="lldb a.out -b -o run --one-line-on-crash bt --one-line-on-crash q"
+else
+    FLAGS="${FLAGS} -Ofast -fomit-frame-pointer -march=native -mtune=native -mllvm -polly -mllvm -polly-vectorizer=stripmine -DNDEBUG"
+    EXECNAME="game"
+    RUN="./a.out"
+fi
+
+clang++ ${1} ${FLAGS}
+
+ASAN_OPTIONS=allocator_frees_and_returns_null_on_realloc_zero=true:detect_stack_use_after_return=true:detect_invalid_pointer_pairs=255:check_initialization_order=true:alloc_dealloc_mismatch=true:detect_odr_violation=255:strict_string_checks=true:strict_init_order=true:use_odr_indicator=true:detect_leaks=1:debug=true \
+LSAN_OPTIONS=suppressions=lsan.supp:use_unaligned=1 \
+${RUN}
+
+rm a.out
+rm -rf a.out.dSYM
